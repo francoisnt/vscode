@@ -132,6 +132,7 @@ export interface NativeParsedArgs {
 	'enable-smoke-test-driver'?: boolean;
 	'skip-sessions-welcome'?: boolean;
 	'remote'?: string;
+	'remote-token-file'?: string;
 	'force'?: boolean;
 	'do-not-sync'?: boolean;
 	'preserve-env'?: boolean;

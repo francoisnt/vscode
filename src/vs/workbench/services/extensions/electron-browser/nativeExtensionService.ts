@@ -30,9 +30,10 @@ import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IProductService } from '../../../../platform/product/common/productService.js';
 import { PersistentConnectionEventType } from '../../../../platform/remote/common/remoteAgentConnection.js';
 import { IRemoteAgentEnvironment } from '../../../../platform/remote/common/remoteAgentEnvironment.js';
-import { IRemoteAuthorityResolverService, RemoteAuthorityResolverError, RemoteAuthorityResolverErrorCode, RemoteConnectionType, ResolverResult, getRemoteAuthorityPrefix } from '../../../../platform/remote/common/remoteAuthorityResolver.js';
+import { IRemoteAuthorityResolverService, RemoteAuthorityResolverError, RemoteAuthorityResolverErrorCode, ResolverResult, getRemoteAuthorityPrefix } from '../../../../platform/remote/common/remoteAuthorityResolver.js';
 import { IRemoteExtensionsScannerService } from '../../../../platform/remote/common/remoteExtensionsScanner.js';
-import { getRemoteName, isLoopbackHost, parseAuthorityWithPort } from '../../../../platform/remote/common/remoteHosts.js';
+import { resolveDirectRemoteAuthority } from '../common/directRemoteAuthority.js';
+import { getRemoteName } from '../../../../platform/remote/common/remoteHosts.js';
 import { updateProxyConfigurationsScope } from '../../../../platform/request/common/request.js';
 import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -276,30 +277,11 @@ export class NativeExtensionService extends AbstractExtensionService implements 
 
 		const authorityPlusIndex = remoteAuthority.indexOf('+');
 		if (authorityPlusIndex === -1) {
-			// This authority does not need to be resolved, simply parse the port number
-			const { host, port } = parseAuthorityWithPort(remoteAuthority);
-
-			// A direct `<host>:<port>` authority bypasses resolver extensions and connects
-			// straight to the given server. This form can originate from untrusted sources
-			// (e.g. the `remoteAuthority` of a `.code-workspace` file), so before connecting
-			// to anything that is not the local loopback interface we ask the user to confirm.
-			// This prevents a crafted workspace from silently pointing the window's backend at
-			// an attacker controlled server.
-			if (!isLoopbackHost(host)) {
-				await this._confirmDirectRemoteConnection(host, port);
-			}
-
-			return {
-				authority: {
-					authority: remoteAuthority,
-					connectTo: {
-						type: RemoteConnectionType.WebSocket,
-						host,
-						port
-					},
-					connectionToken: undefined
-				}
-			};
+			return resolveDirectRemoteAuthority(
+				remoteAuthority,
+				authority => this._nativeHostService.getRemoteConnectionToken(authority),
+				(host, port) => this._confirmDirectRemoteConnection(host, port)
+			);
 		}
 
 		return this._resolveAuthorityOnExtensionHosts(ExtensionHostKind.LocalProcess, remoteAuthority);
